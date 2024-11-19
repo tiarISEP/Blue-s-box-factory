@@ -154,7 +154,7 @@ def runLevel(levels, levelNum):
     while True: # main game loop
         # Reset these variables:
         playerTurn = None
-        playerMoveTo = None
+        playerMoveTo = -1
         keyPressed = False
         Grab = False
 
@@ -167,13 +167,13 @@ def runLevel(levels, levelNum):
                 # Handle key presses
                 keyPressed = True
                 if event.key == K_LEFT:
-                    playerMoveTo = LEFT
+                    playerMoveTo = 1
                 elif event.key == K_RIGHT:
-                    playerMoveTo = RIGHT
+                    playerMoveTo = 3
                 elif event.key == K_UP:
-                    playerMoveTo = UP
+                    playerMoveTo = 0
                 elif event.key == K_DOWN:
-                    playerMoveTo = DOWN
+                    playerMoveTo = 2
 
                 # Set the camera move mode.
                 elif event.key == K_a:
@@ -215,7 +215,7 @@ def runLevel(levels, levelNum):
                 elif event.key == K_s:
                     cameraDown = False
 
-        if playerMoveTo != None and not levelIsComplete:
+        if playerMoveTo != -1 and not levelIsComplete:
             # If the player pushed a key to move, make the move
             # (if possible) and push any stars that are pushable.
             moved = makeMove(mapObj, gameStateObj, playerMoveTo)
@@ -406,14 +406,39 @@ def makeGrab(mapObj, gameStateObj):
 def makeTurn(mapObj, gameStateObj, playerTurn):
     """"""
     plr_dir = integer(gameStateObj['playerdirection'])
+    stars = gameStateObj['stars']
 
     if playerTurn == LEFT:
         turnamount = 1
     elif playerTurn == RIGHT:
         turnamount = -1
-    
     if (plr_dir + turnamount == 4) or (plr_dir + turnamount == -1):
         turnamount = turnamount*(-3)
+
+    if gameStateObj['grabstar'] != []:
+        turnstar1 = moveStar(mapObj, gameStateObj, plr_dir + turnamount)
+        if not turnstar1 :
+            gameStateObj['grabstaroffset'] = [(0,0)]
+            gameStateObj['otherstar'] = []
+            return False
+        if playerTurn == LEFT:
+            turnamount2 = 1
+        elif playerTurn == RIGHT:
+            turnamount2 = -1
+        if (plr_dir + turnamount2 +turnamount == 4) or (plr_dir + turnamount2+ turnamount== -1):
+            turnamount2 = turnamount2 * (-3)
+        turnstar2 = moveStar(mapObj, gameStateObj, plr_dir + turnamount2 + turnamount)
+        if not turnstar2 :
+            gameStateObj['grabstaroffset'] = [(0,0)]
+            gameStateObj['otherstar'] = []
+            return False
+        gameStateObj['grabstar'] = [(gameStateObj['grabstar'][0][0]+gameStateObj['grabstaroffset'][0][0],gameStateObj['grabstar'][0][1]+gameStateObj['grabstaroffset'][0][1])]
+        gameStateObj['grabstaroffset'] = [(0,0)]
+        if gameStateObj['otherstar'] != []:
+            for i in range(len(gameStateObj['otherstar'])) :
+                stars[gameStateObj['otherstar'][i][0]] = gameStateObj['otherstar'][i][1]
+        gameStateObj['otherstar'] = []
+
     gameStateObj['playerdirection'] = plr_dir + turnamount
     return True
 
@@ -425,41 +450,42 @@ def moveStar(mapObj, gameStateObj, playerMoveTo):
         Returns True if the player moved, otherwise False."""
 
     # Make sure the player can move in the direction they want.
-    [(starx, stary)] = gameStateObj['grabstar']
+    [(starx, stary)] = [(gameStateObj['grabstar'][0][0]+gameStateObj['grabstaroffset'][0][0],gameStateObj['grabstar'][0][1]+gameStateObj['grabstaroffset'][0][1])]
 
     # This variable is "syntactic sugar". Typing "stars" is more
     # readable than typing "gameStateObj['stars']" in our code.
     stars = gameStateObj['stars']
+    pushstars= gameStateObj['otherstar']
 
     # The code for handling each of the directions is so similar aside
     # from adding or subtracting 1 to the x/y coordinates. We can
     # simplify it by using the xOffset and yOffset variables.
-    if playerMoveTo == UP:
-        starxOffset = 0
-        staryOffset = -1
-    elif playerMoveTo == RIGHT:
-        starxOffset = 1
-        staryOffset = 0
-    elif playerMoveTo == DOWN:
-        starxOffset = 0
-        staryOffset = 1
-    elif playerMoveTo == LEFT:
-        starxOffset = -1
-        staryOffset = 0
+    if playerMoveTo == 0:
+        xOffset = 0
+        yOffset = -1
+    elif playerMoveTo == 3:
+        xOffset = 1
+        yOffset = 0
+    elif playerMoveTo == 2:
+        xOffset = 0
+        yOffset = 1
+    elif playerMoveTo == 1:
+        xOffset = -1
+        yOffset = 0
 
     # See if the player can move in that direction.
-    if isWall(mapObj, starx + starxOffset, stary + staryOffset):
+    if isWall(mapObj, starx + xOffset, stary + yOffset):
         return False
     else:
-        if (starx + starxOffset, stary + staryOffset) in stars:
+        if (starx + xOffset, stary + yOffset) in stars:
             # There is a star in the way, see if the star can push it.
-            if not isBlocked(mapObj, gameStateObj, starx + (starxOffset * 2), stary + (staryOffset * 2)):
+            if not isBlocked(mapObj, gameStateObj, starx + (xOffset * 2), stary + (yOffset * 2)):
                 # Move the star.
-                gameStateObj['otherstar'] = stars.index((starx + starxOffset, stary + staryOffset))
+                pushstars.append( (stars.index((starx + xOffset, stary + yOffset)),(starx + xOffset*2, stary + yOffset*2)) )
             else:
                 return False
         # Move the player upwards.
-        gameStateObj['grabstartemp'] = [(starx + starxOffset, stary + staryOffset)]
+        gameStateObj['grabstaroffset'] = [(gameStateObj['grabstaroffset'][0][0]+xOffset, gameStateObj['grabstaroffset'][0][1]+yOffset)]
         return True
 
 def makeMove(mapObj, gameStateObj, playerMoveTo):
@@ -480,31 +506,31 @@ def makeMove(mapObj, gameStateObj, playerMoveTo):
     stars = gameStateObj['stars']
 
     if gameStateObj['grabstar'] != []:
-        moveStar(mapObj, gameStateObj, playerMoveTo)
-        if not moveStar(mapObj, gameStateObj, playerMoveTo):
+        starwalk = moveStar(mapObj, gameStateObj, playerMoveTo)
+        if not starwalk:
             return False
 
 
     # The code for handling each of the directions is so similar aside
     # from adding or subtracting 1 to the x/y coordinates. We can
     # simplify it by using the xOffset and yOffset variables.
-    if playerMoveTo == UP:
+    if playerMoveTo == 0:
         xOffset = 0
         yOffset = -1
-    elif playerMoveTo == RIGHT:
+    elif playerMoveTo == 3:
         xOffset = 1
         yOffset = 0
-    elif playerMoveTo == DOWN:
+    elif playerMoveTo == 2:
         xOffset = 0
         yOffset = 1
-    elif playerMoveTo == LEFT:
+    elif playerMoveTo == 1:
         xOffset = -1
         yOffset = 0
 
     # See if the player can move in that direction.
     if isWall(mapObj, playerx + xOffset, playery + yOffset):
-        gameStateObj['grabstartemp'] = []
-        gameStateObj['otherstar'] = -1
+        gameStateObj['grabstaroffset'] = [(0,0)]
+        gameStateObj['otherstar'] = []
         return False
     else:
         if (playerx + xOffset, playery + yOffset) in stars:
@@ -514,16 +540,18 @@ def makeMove(mapObj, gameStateObj, playerMoveTo):
                 ind = stars.index((playerx + xOffset, playery + yOffset))
                 stars[ind] = (stars[ind][0] + xOffset, stars[ind][1] + yOffset)
             else:
-                gameStateObj['grabstartemp'] = []
-                gameStateObj['otherstar'] = -1
+                gameStateObj['grabstaroffset'] = [(0,0)]
+                gameStateObj['otherstar'] = []
                 return False
         # Move the player upwards.
-        gameStateObj['grabstar'] = gameStateObj['grabstartemp']
-        gameStateObj['grabstartemp'] = []
+        if gameStateObj['grabstar'] != []:
+            gameStateObj['grabstar'] = [(gameStateObj['grabstar'][0][0]+gameStateObj['grabstaroffset'][0][0],gameStateObj['grabstar'][0][1]+gameStateObj['grabstaroffset'][0][1])]
+        gameStateObj['grabstaroffset'] = [(0,0)]
         gameStateObj['player'] = (playerx + xOffset, playery + yOffset)
-        if gameStateObj['otherstar'] != -1:
-            stars[gameStateObj['otherstar']] = (stars[gameStateObj['otherstar']][0] + xOffset, stars[gameStateObj['otherstar']][1] + yOffset)
-        gameStateObj['otherstar'] = -1
+        if gameStateObj['otherstar'] != []:
+            for i in range(len(gameStateObj['otherstar'])):
+                stars[gameStateObj['otherstar'][i][0]]= gameStateObj['otherstar'][i][1]
+        gameStateObj['otherstar'] = []
         return True
 
 
@@ -650,8 +678,8 @@ def readLevelsFile(filename):
                             'stars': stars,
                             'playerdirection': 0,
                             'grabstar': grabStar,
-                            'grabstartemp': [],
-                            'otherstar': -1}
+                            'grabstaroffset': [(0,0)],
+                            'otherstar': []}
             levelObj = {'width': maxWidth,
                         'height': len(mapObj),
                         'mapObj': mapObj,
