@@ -56,6 +56,7 @@ def main():
     IMAGESDICT = {'uncovered goal': pygame.image.load('RedSelector.png'),
                   'covered goal': pygame.image.load('Selector.png'),
                   'star': pygame.image.load('Star.png'),
+                  'grabstar': pygame.image.load('boy.png'),
                   'corner': pygame.image.load('Wall_Block_Tall.png'),
                   'wall': pygame.image.load('Wood_Block_Tall.png'),
                   'inside floor': pygame.image.load('Plain_Block.png'),
@@ -67,13 +68,15 @@ def main():
                   'catgirl': pygame.image.load('catgirl.png'),
                   'horngirl': pygame.image.load('horngirl.png'),
                   'pinkgirl': pygame.image.load('pinkgirl.png'),
-                  'rock': pygame.image.load('Rock.png'),
-                  'short tree': pygame.image.load('Tree_Short.png'),
-                  'tall tree': pygame.image.load('Tree_Tall.png'),
-                  'ugly tree': pygame.image.load('Tree_Ugly.png'),
+                  'rock': pygame.image.load('Empty.png'),
+                  'short tree': pygame.image.load('Empty.png'),
+                  'tall tree': pygame.image.load('Empty.png'),
+                  'ugly tree': pygame.image.load('Empty.png'),
                   'up': pygame.image.load('up.png'),
                   'right': pygame.image.load('right.png'),
-                  'down': pygame.image.load('down.png')
+                  'down': pygame.image.load('down.png'),
+                  'left': pygame.image.load('left.png'),
+                  'empty': pygame.image.load('Empty.png')
                   }
 
     # These dict values are global, and map the character that appears
@@ -81,7 +84,7 @@ def main():
     TILEMAPPING = {'x': IMAGESDICT['corner'],
                    '#': IMAGESDICT['wall'],
                    'o': IMAGESDICT['inside floor'],
-                   ' ': IMAGESDICT['outside floor']}
+                   ' ': IMAGESDICT['empty']}
     OUTSIDEDECOMAPPING = {'1': IMAGESDICT['rock'],
                           '2': IMAGESDICT['short tree'],
                           '3': IMAGESDICT['tall tree'],
@@ -91,7 +94,7 @@ def main():
     # currentImage is the index of the player's current player image.
     currentImage = 0
     PLAYERIMAGES = [IMAGESDICT['up'],
-                    IMAGESDICT['boy'],
+                    IMAGESDICT['left'],
                     IMAGESDICT['down'],
                     IMAGESDICT['right']]
 
@@ -153,6 +156,7 @@ def runLevel(levels, levelNum):
         playerTurn = None
         playerMoveTo = None
         keyPressed = False
+        Grab = False
 
         for event in pygame.event.get(): # event handling loop
             if event.type == QUIT:
@@ -190,6 +194,9 @@ def runLevel(levels, levelNum):
                     return 'next'
                 elif event.key == K_b:
                     return 'back'
+
+                elif event.key == K_SPACE:
+                    Grab = True
 
                 elif event.key == K_ESCAPE:
                     terminate() # Esc key quits.
@@ -230,6 +237,19 @@ def runLevel(levels, levelNum):
             turned = makeTurn(mapObj, gameStateObj, playerTurn)
 
             if turned:
+                mapNeedsRedraw = True
+
+            if isLevelFinished(levelObj, gameStateObj):
+                # level is solved, we should show the "Solved!" image.
+                levelIsComplete = True
+                keyPressed = False
+
+        if Grab and not levelIsComplete:
+            # If the player pushed a key to grab, grab
+            # (if possible)
+            grabbed = makeGrab(mapObj,gameStateObj)
+
+            if grabbed:
                 mapNeedsRedraw = True
 
             if isLevelFinished(levelObj, gameStateObj):
@@ -288,7 +308,6 @@ def isWall(mapObj, x, y):
         return True # wall is blocking
     return False
 
-
 def decorateMap(mapObj, startxy):
     """Makes a copy of the given map object and modifies it.
     Here is what is done to it:
@@ -344,6 +363,46 @@ def isBlocked(mapObj, gameStateObj, x, y):
 
     return False
 
+def makeGrab(mapObj, gameStateObj):
+    """Checks if there is a box/star in the direction the player
+    is facing. If so that box/star will be replaced by a grabbed box"""
+    # Make sure the player can grab a box/star
+    playerx, playery = gameStateObj['player']
+
+    # This variable is "syntactic sugar". Typing "stars" is more
+    # readable than typing "gameStateObj['stars']" in our code.
+    stars = gameStateObj['stars']
+    grabStar = gameStateObj['grabstar']
+    direction = gameStateObj['playerdirection']
+    # The code for handling each of the directions is so similar aside
+    # from adding or subtracting 1 to the x/y coordinates. We can
+    # simplify it by using the xOffset and yOffset variables.
+    if  direction == 0:
+        xOffset = 0
+        yOffset = -1
+    elif direction == 3:
+        xOffset = 1
+        yOffset = 0
+    elif direction == 2:
+        xOffset = 0
+        yOffset = 1
+    elif direction == 1:
+        xOffset = -1
+        yOffset = 0
+
+    #check that there's a box/star
+    if (playerx + xOffset, playery + yOffset) in stars:
+        stars.remove((playerx + xOffset, playery + yOffset))
+        grabStar.append((playerx + xOffset, playery + yOffset))
+        return True
+    elif (playerx + xOffset, playery + yOffset) in grabStar:
+        grabStar.remove((playerx + xOffset, playery + yOffset))
+        stars.append((playerx + xOffset, playery + yOffset))
+        return True
+    else:
+        return False
+
+
 def makeTurn(mapObj, gameStateObj, playerTurn):
     """"""
     plr_dir = integer(gameStateObj['playerdirection'])
@@ -358,19 +417,73 @@ def makeTurn(mapObj, gameStateObj, playerTurn):
     gameStateObj['playerdirection'] = plr_dir + turnamount
     return True
 
+def moveStar(mapObj, gameStateObj, playerMoveTo):
+    """Given a map and game state object, see if it is possible for the
+        player to make the given move. If it is, then change the player's
+        position (and the position of any pushed star). If not, do nothing.
+
+        Returns True if the player moved, otherwise False."""
+
+    # Make sure the player can move in the direction they want.
+    [(starx, stary)] = gameStateObj['grabstar']
+
+    # This variable is "syntactic sugar". Typing "stars" is more
+    # readable than typing "gameStateObj['stars']" in our code.
+    stars = gameStateObj['stars']
+
+    # The code for handling each of the directions is so similar aside
+    # from adding or subtracting 1 to the x/y coordinates. We can
+    # simplify it by using the xOffset and yOffset variables.
+    if playerMoveTo == UP:
+        starxOffset = 0
+        staryOffset = -1
+    elif playerMoveTo == RIGHT:
+        starxOffset = 1
+        staryOffset = 0
+    elif playerMoveTo == DOWN:
+        starxOffset = 0
+        staryOffset = 1
+    elif playerMoveTo == LEFT:
+        starxOffset = -1
+        staryOffset = 0
+
+    # See if the player can move in that direction.
+    if isWall(mapObj, starx + starxOffset, stary + staryOffset):
+        return False
+    else:
+        if (starx + starxOffset, stary + staryOffset) in stars:
+            # There is a star in the way, see if the star can push it.
+            if not isBlocked(mapObj, gameStateObj, starx + (starxOffset * 2), stary + (staryOffset * 2)):
+                # Move the star.
+                gameStateObj['otherstar'] = stars.index((starx + starxOffset, stary + staryOffset))
+            else:
+                return False
+        # Move the player upwards.
+        gameStateObj['grabstartemp'] = [(starx + starxOffset, stary + staryOffset)]
+        return True
+
 def makeMove(mapObj, gameStateObj, playerMoveTo):
     """Given a map and game state object, see if it is possible for the
     player to make the given move. If it is, then change the player's
     position (and the position of any pushed star). If not, do nothing.
+
+    In addition, check if there is a grabstar, and move it in the same direction
 
     Returns True if the player moved, otherwise False."""
 
     # Make sure the player can move in the direction they want.
     playerx, playery = gameStateObj['player']
 
+
     # This variable is "syntactic sugar". Typing "stars" is more
     # readable than typing "gameStateObj['stars']" in our code.
     stars = gameStateObj['stars']
+
+    if gameStateObj['grabstar'] != []:
+        moveStar(mapObj, gameStateObj, playerMoveTo)
+        if not moveStar(mapObj, gameStateObj, playerMoveTo):
+            return False
+
 
     # The code for handling each of the directions is so similar aside
     # from adding or subtracting 1 to the x/y coordinates. We can
@@ -390,6 +503,8 @@ def makeMove(mapObj, gameStateObj, playerMoveTo):
 
     # See if the player can move in that direction.
     if isWall(mapObj, playerx + xOffset, playery + yOffset):
+        gameStateObj['grabstartemp'] = []
+        gameStateObj['otherstar'] = -1
         return False
     else:
         if (playerx + xOffset, playery + yOffset) in stars:
@@ -399,9 +514,16 @@ def makeMove(mapObj, gameStateObj, playerMoveTo):
                 ind = stars.index((playerx + xOffset, playery + yOffset))
                 stars[ind] = (stars[ind][0] + xOffset, stars[ind][1] + yOffset)
             else:
+                gameStateObj['grabstartemp'] = []
+                gameStateObj['otherstar'] = -1
                 return False
         # Move the player upwards.
+        gameStateObj['grabstar'] = gameStateObj['grabstartemp']
+        gameStateObj['grabstartemp'] = []
         gameStateObj['player'] = (playerx + xOffset, playery + yOffset)
+        if gameStateObj['otherstar'] != -1:
+            stars[gameStateObj['otherstar']] = (stars[gameStateObj['otherstar']][0] + xOffset, stars[gameStateObj['otherstar']][1] + yOffset)
+        gameStateObj['otherstar'] = -1
         return True
 
 
@@ -503,6 +625,7 @@ def readLevelsFile(filename):
             starty = None
             goals = [] # list of (x, y) tuples for each goal.
             stars = [] # list of (x, y) for each star's starting position.
+            grabStar = []
             for x in range(maxWidth):
                 for y in range(len(mapObj[x])):
                     if mapObj[x][y] in ('@', '+'):
@@ -525,7 +648,10 @@ def readLevelsFile(filename):
             gameStateObj = {'player': (startx, starty),
                             'stepCounter': 0,
                             'stars': stars,
-                            'playerdirection': 0}
+                            'playerdirection': 0,
+                            'grabstar': grabStar,
+                            'grabstartemp': [],
+                            'otherstar': -1}
             levelObj = {'width': maxWidth,
                         'height': len(mapObj),
                         'mapObj': mapObj,
@@ -598,9 +724,16 @@ def drawMap(mapObj, gameStateObj, goals):
                     mapSurf.blit(IMAGESDICT['covered goal'], spaceRect)
                 # Then draw the star sprite.
                 mapSurf.blit(IMAGESDICT['star'], spaceRect)
+            elif (x, y) in gameStateObj['grabstar']:
+                if (x, y) in goals:
+                    # A goal AND star are on this space, draw goal first.
+                    mapSurf.blit(IMAGESDICT['covered goal'], spaceRect)
+                # Then draw the star sprite.
+                mapSurf.blit(IMAGESDICT['grabstar'], spaceRect)
             elif (x, y) in goals:
                 # Draw a goal without a star on it.
                 mapSurf.blit(IMAGESDICT['uncovered goal'], spaceRect)
+
 
             # Last draw the player on the board.
             if (x, y) == gameStateObj['player']:
