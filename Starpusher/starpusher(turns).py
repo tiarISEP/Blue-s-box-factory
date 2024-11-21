@@ -25,8 +25,9 @@ CAM_MOVE_SPEED = 5 # how many pixels per frame the camera moves
 OUTSIDE_DECORATION_PCT = 20
 
 BRIGHTBLUE = (  0, 170, 255)
+DARKBLUE = (27, 80, 133)
 WHITE      = (255, 255, 255)
-BGCOLOR = BRIGHTBLUE
+BGCOLOR = DARKBLUE
 TEXTCOLOR = WHITE
 
 UP = 'up'
@@ -76,7 +77,11 @@ def main():
                   'right': pygame.image.load('right.png'),
                   'down': pygame.image.load('down.png'),
                   'left': pygame.image.load('left.png'),
-                  'empty': pygame.image.load('Empty.png')
+                  'empty': pygame.image.load('Empty.png'),
+                  'opendoor': pygame.image.load('Open_door.png'),
+                  'closeddoor': pygame.image.load('Close_door.png'),
+                  'button': pygame.image.load('Button.png'),
+                  'buttoff': pygame.image.load('buttoff.png')
                   }
 
     # These dict values are global, and map the character that appears
@@ -176,18 +181,18 @@ def runLevel(levels, levelNum):
                     playerMoveTo = 2
 
                 # Set the camera move mode.
-                elif event.key == K_a:
+                elif event.key == K_q:
                     cameraLeft = True
                 elif event.key == K_d:
                     cameraRight = True
-                elif event.key == K_w:
+                elif event.key == K_z:
                     cameraUp = True
                 elif event.key == K_s:
                     cameraDown = True
 
-                elif event.key == K_j:
+                elif event.key == K_w:
                     playerTurn = LEFT    
-                elif event.key == K_k:
+                elif event.key == K_x:
                     playerTurn = RIGHT    
 
                 elif event.key == K_n:
@@ -206,11 +211,11 @@ def runLevel(levels, levelNum):
 
             elif event.type == KEYUP:
                 # Unset the camera move mode.
-                if event.key == K_a:
+                if event.key == K_q:
                     cameraLeft = False
                 elif event.key == K_d:
                     cameraRight = False
-                elif event.key == K_w:
+                elif event.key == K_z:
                     cameraUp = False
                 elif event.key == K_s:
                     cameraDown = False
@@ -302,11 +307,14 @@ def runLevel(levels, levelNum):
 def isWall(mapObj, x, y):
     """Returns True if the (x, y) position on
     the map is a wall, otherwise return False."""
+
     if x < 0 or x >= len(mapObj) or y < 0 or y >= len(mapObj[x]):
         return False # x and y aren't actually on the map.
     elif mapObj[x][y] in ('#', 'x'):
         return True # wall is blocking
+
     return False
+
 
 def decorateMap(mapObj, startxy):
     """Makes a copy of the given map object and modifies it.
@@ -329,7 +337,7 @@ def decorateMap(mapObj, startxy):
                 mapObjCopy[x][y] = ' '
 
     # Flood fill to determine inside/outside floor tiles.
-    floodFill(mapObjCopy, startx, starty, ' ', 'o')
+    floodFill(mapObjCopy, startx, starty, ' ',  'o')
 
     # Convert the adjoined walls into corner tiles.
     for x in range(len(mapObjCopy)):
@@ -350,9 +358,12 @@ def decorateMap(mapObj, startxy):
 
 def isBlocked(mapObj, gameStateObj, x, y):
     """Returns True if the (x, y) position on the map is
-    blocked by a wall or star, otherwise return False."""
+    blocked by a wall or star or closed door, otherwise return False."""
 
-    if isWall(mapObj, x, y):
+    if (x, y) in gameStateObj['doors'] and not(isDoorOpen(gameStateObj,x, y)):
+        return True
+
+    elif isWall(mapObj, x, y):
         return True
 
     elif x < 0 or x >= len(mapObj) or y < 0 or y >= len(mapObj[x]):
@@ -476,6 +487,8 @@ def moveStar(mapObj, gameStateObj, playerMoveTo):
     # See if the player can move in that direction.
     if isWall(mapObj, starx + xOffset, stary + yOffset):
         return False
+    if (starx + xOffset, stary + yOffset) in gameStateObj['doors'] and not(isDoorOpen(gameStateObj,starx + xOffset, stary + yOffset)):
+        return False
     else:
         if (starx + xOffset, stary + yOffset) in stars:
             # There is a star in the way, see if the star can push it.
@@ -530,6 +543,10 @@ def makeMove(mapObj, gameStateObj, playerMoveTo):
     # See if the player can move in that direction.
     if isWall(mapObj, playerx + xOffset, playery + yOffset):
         gameStateObj['grabstaroffset'] = [(0,0)]
+        gameStateObj['otherstar'] = []
+        return False
+    elif (playerx + xOffset, playery + yOffset) in gameStateObj['doors'] and not(isDoorOpen(gameStateObj,playerx + xOffset, playery + yOffset)):
+        gameStateObj['grabstaroffset'] = [(0, 0)]
         gameStateObj['otherstar'] = []
         return False
     else:
@@ -652,18 +669,26 @@ def readLevelsFile(filename):
             startx = None # The x and y for the player's starting position
             starty = None
             goals = [] # list of (x, y) tuples for each goal.
+            buttons = []
+            doors = []
             stars = [] # list of (x, y) for each star's starting position.
             grabStar = []
             for x in range(maxWidth):
                 for y in range(len(mapObj[x])):
-                    if mapObj[x][y] in ('@', '+'):
+                    if mapObj[x][y] in ('d'):
+                        # 'd' is door
+                        doors.append((x,y))
+                    if mapObj[x][y] in ('b', 'p', 's'):
+                        # 'b' is button, 'p' is player & button, 's' is star & button
+                        buttons.append((x,y))
+                    if mapObj[x][y] in ('@', '+','p'):
                         # '@' is player, '+' is player & goal
                         startx = x
                         starty = y
                     if mapObj[x][y] in ('.', '+', '*'):
                         # '.' is goal, '*' is star & goal
                         goals.append((x, y))
-                    if mapObj[x][y] in ('$', '*'):
+                    if mapObj[x][y] in ('$', '*', 's'):
                         # '$' is star
                         stars.append((x, y))
 
@@ -678,7 +703,10 @@ def readLevelsFile(filename):
                             'stars': stars,
                             'playerdirection': 0,
                             'grabstar': grabStar,
+                            'doors': doors,
+                            'buttons': buttons,
                             'grabstaroffset': [(0,0)],
+                            'buttonPressed?': False,
                             'otherstar': []}
             levelObj = {'width': maxWidth,
                         'height': len(mapObj),
@@ -708,13 +736,13 @@ def floodFill(mapObj, x, y, oldCharacter, newCharacter):
     if mapObj[x][y] == oldCharacter:
         mapObj[x][y] = newCharacter
 
-    if x < len(mapObj) - 1 and mapObj[x+1][y] == oldCharacter:
+    if x < len(mapObj) - 1 and (mapObj[x+1][y] == oldCharacter or mapObj[x+1][y] == 'd'):
         floodFill(mapObj, x+1, y, oldCharacter, newCharacter) # call right
-    if x > 0 and mapObj[x-1][y] == oldCharacter:
+    if x > 0 and (mapObj[x-1][y] == oldCharacter or mapObj[x-1][y] == 'd'):
         floodFill(mapObj, x-1, y, oldCharacter, newCharacter) # call left
-    if y < len(mapObj[x]) - 1 and mapObj[x][y+1] == oldCharacter:
+    if y < len(mapObj[x]) - 1 and (mapObj[x][y+1] == oldCharacter or mapObj[x][y+1] == 'd'):
         floodFill(mapObj, x, y+1, oldCharacter, newCharacter) # call down
-    if y > 0 and mapObj[x][y-1] == oldCharacter:
+    if y > 0 and (mapObj[x][y-1] == oldCharacter or mapObj[x][y-1] == 'd'):
         floodFill(mapObj, x, y-1, oldCharacter, newCharacter) # call up
 
 
@@ -750,14 +778,29 @@ def drawMap(mapObj, gameStateObj, goals):
                 if (x, y) in goals:
                     # A goal AND star are on this space, draw goal first.
                     mapSurf.blit(IMAGESDICT['covered goal'], spaceRect)
+                elif (x,y) in gameStateObj['buttons']:
+                    mapSurf.blit(IMAGESDICT['button'], spaceRect)
+                elif (x,y) in gameStateObj['doors']:
+                    mapSurf.blit(IMAGESDICT['opendoor'], spaceRect)
                 # Then draw the star sprite.
                 mapSurf.blit(IMAGESDICT['star'], spaceRect)
             elif (x, y) in gameStateObj['grabstar']:
                 if (x, y) in goals:
                     # A goal AND star are on this space, draw goal first.
                     mapSurf.blit(IMAGESDICT['covered goal'], spaceRect)
+                elif (x,y) in gameStateObj['buttons']:
+                    mapSurf.blit(IMAGESDICT['button'], spaceRect)
+                elif (x,y) in gameStateObj['doors']:
+                    mapSurf.blit(IMAGESDICT['opendoor'], spaceRect)
                 # Then draw the star sprite.
                 mapSurf.blit(IMAGESDICT['grabstar'], spaceRect)
+            elif (x,y) in gameStateObj['doors']:
+                if isDoorOpen(gameStateObj,x,y):
+                    mapSurf.blit(IMAGESDICT['opendoor'], spaceRect)
+                else:
+                    mapSurf.blit(IMAGESDICT['closeddoor'], spaceRect)
+            elif (x,y) in gameStateObj['buttons']:
+                mapSurf.blit(IMAGESDICT['buttoff'], spaceRect)
             elif (x, y) in goals:
                 # Draw a goal without a star on it.
                 mapSurf.blit(IMAGESDICT['uncovered goal'], spaceRect)
@@ -765,6 +808,10 @@ def drawMap(mapObj, gameStateObj, goals):
 
             # Last draw the player on the board.
             if (x, y) == gameStateObj['player']:
+                if (x,y) in gameStateObj['buttons']:
+                    mapSurf.blit(IMAGESDICT['button'], spaceRect)
+                elif (x,y) in gameStateObj['doors']:
+                    mapSurf.blit(IMAGESDICT['opendoor'], spaceRect)
                 # Note: The value "currentImage" refers
                 # to a key in "PLAYERIMAGES" which has the
                 # specific player image we want to show.
@@ -778,10 +825,20 @@ def drawMap(mapObj, gameStateObj, goals):
 def isLevelFinished(levelObj, gameStateObj):
     """Returns True if all the goals have stars in them."""
     for goal in levelObj['goals']:
-        if goal not in gameStateObj['stars']:
+        if (goal not in gameStateObj['stars']) and (goal not in gameStateObj['grabstar']):
             # Found a space with a goal but no star on it.
             return False
     return True
+
+def isDoorOpen (gameStateObj,x,y):
+    """Returns True if all the goals have stars in them."""
+    for button in gameStateObj['buttons']:
+        if (button in gameStateObj['stars']) or (button in gameStateObj['grabstar']) or (button == gameStateObj['player']):
+            # Found a space with a button but no star or player on it.
+            return True
+    if ((x,y) in gameStateObj['stars']) or ((x,y) in gameStateObj['grabstar']) or ((x,y) == gameStateObj['player']):
+            return True
+    return False
 
 
 def terminate():
