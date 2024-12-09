@@ -5,7 +5,8 @@
 
 import random, sys, copy, os, pygame
 from pygame.locals import *
-from tomlkit import integer
+from pygame import mixer
+
 
 FPS = 30 # frames per second to update the screen
 WINWIDTH = 800 # width of the program's window, in pixels
@@ -25,7 +26,7 @@ CAM_MOVE_SPEED = 5 # how many pixels per frame the camera moves
 OUTSIDE_DECORATION_PCT = 20
 
 BRIGHTBLUE = (  0, 170, 255)
-DARKBLUE = (27, 80, 133)
+DARKBLUE = (27, 120, 133)
 WHITE      = (255, 255, 255)
 BGCOLOR = DARKBLUE
 TEXTCOLOR = WHITE
@@ -38,7 +39,14 @@ RIGHT = 'right'
 
 def main():
     global FPSCLOCK, DISPLAYSURF, IMAGESDICT, TILEMAPPING, OUTSIDEDECOMAPPING, BASICFONT, PLAYERIMAGES, currentImage
-
+    # Starting the mixer
+    mixer.init()
+    # Loading the song
+    mixer.music.load("Blue's song.mp3")
+    # Setting the volume
+    mixer.music.set_volume(0.6)
+    # Start playing the song
+    mixer.music.play(loops=-1)
     # Pygame initialization and basic set up of the global variables.
     pygame.init()
     FPSCLOCK = pygame.time.Clock()
@@ -56,10 +64,10 @@ def main():
     # Surface objects returned by pygame.image.load().
     IMAGESDICT = {'uncovered goal': pygame.image.load('RedSelector.png'),
                   'covered goal': pygame.image.load('Selector.png'),
-                  'star': pygame.image.load('Star.png'),
-                  'grabstar': pygame.image.load('boy.png'),
+                  'star': pygame.image.load('Box.png'),
+                  'grabstar': pygame.image.load('Grabbox.png'),
                   'corner': pygame.image.load('Wall_Block_Tall.png'),
-                  'wall': pygame.image.load('Wood_Block_Tall.png'),
+                  'wall': pygame.image.load('Wall_Block_Tall.png'),
                   'inside floor': pygame.image.load('Plain_Block.png'),
                   'outside floor': pygame.image.load('Grass_Block.png'),
                   'title': pygame.image.load('star_title.png'),
@@ -73,15 +81,15 @@ def main():
                   'short tree': pygame.image.load('Empty.png'),
                   'tall tree': pygame.image.load('Empty.png'),
                   'ugly tree': pygame.image.load('Empty.png'),
-                  'up': pygame.image.load('up.png'),
-                  'right': pygame.image.load('right.png'),
-                  'down': pygame.image.load('down.png'),
-                  'left': pygame.image.load('left.png'),
+                  'up': pygame.image.load('Blueup.png'),
+                  'right': pygame.image.load('Blueright.png'),
+                  'down': pygame.image.load('Bluedown.png'),
+                  'left': pygame.image.load('Blueleft.png'),
                   'empty': pygame.image.load('Empty.png'),
-                  'opendoor': pygame.image.load('Open_door.png'),
-                  'closeddoor': pygame.image.load('Close_door.png'),
+                  'opendoor': pygame.image.load('OpenDoor.png'),
+                  'closeddoor': pygame.image.load('ClosedDoor.png'),
                   'button': pygame.image.load('Button.png'),
-                  'buttoff': pygame.image.load('buttoff.png')
+                  'buttoff': pygame.image.load('Buttoff.png')
                   }
 
     # These dict values are global, and map the character that appears
@@ -416,7 +424,7 @@ def makeGrab(mapObj, gameStateObj):
 
 def makeTurn(mapObj, gameStateObj, playerTurn):
     """"""
-    plr_dir = integer(gameStateObj['playerdirection'])
+    plr_dir = gameStateObj['playerdirection']
     stars = gameStateObj['stars']
 
     if playerTurn == LEFT:
@@ -586,10 +594,11 @@ def startScreen():
     # Unfortunately, Pygame's font & text system only shows one line at
     # a time, so we can't use strings with \n newline characters in them.
     # So we will use a list with each line in it.
-    instructionText = ['Push the stars over the marks.',
-                       'Arrow keys to move, WASD for camera control, P to change character.',
-                       'Backspace to reset level, Esc to quit.',
-                       'N for next level, B to go back a level.']
+    instructionText = ['Poussez et tirez les boites sur les tuiles colorées!',
+                       'Utilisez les flèches pour bouger, et ZQSD pour maneuvrer la caméra.',
+                       'Appuyez sur ESPACE devant une boite pour la saisir, et W et X pour tourner.',
+                       'Backspace pour réinitialiser le niveau et Esc pour le quitter.',
+                       'N pour sauter le niveau et B pour retourner au niveau précedent.']
 
     # Start with drawing a blank color to the entire window:
     DISPLAYSURF.fill(BGCOLOR)
@@ -701,7 +710,7 @@ def readLevelsFile(filename):
             gameStateObj = {'player': (startx, starty),
                             'stepCounter': 0,
                             'stars': stars,
-                            'playerdirection': 0,
+                            'playerdirection': 2,
                             'grabstar': grabStar,
                             'doors': doors,
                             'buttons': buttons,
